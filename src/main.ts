@@ -22,6 +22,7 @@ import { updateLayersPanel, setupLayerButtons } from './ui/layers';
 import { exportSVG } from './ui/export';
 import { setupMenus } from './ui/menus';
 import { drawRulers } from './ui/rulers';
+import { initDebugOverlay, manualDebugDump } from './ui/debug-overlay';
 import { setupColorPicker } from './ui/color-picker';
 import { setupAlign } from './ui/align';
 import { renderArtboards } from './ui/artboard-renderer';
@@ -33,6 +34,10 @@ import { setupFiltersPanel, updateFiltersPanel } from './ui/filters-panel';
 import { openFilterBuilder } from './ui/filter-builder';
 import type { Tool } from './tools/base';
 import type { ToolName } from './core/types';
+
+// Debug overlay - activate with ?debug in URL
+initDebugOverlay();
+(window as unknown as Record<string, unknown>).__svgmakerDebug = manualDebugDump;
 
 // DOM elements
 const svgCanvas = document.getElementById('svg-canvas') as unknown as SVGSVGElement;

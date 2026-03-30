@@ -1,4 +1,5 @@
 import type { Point } from './types';
+import { dbg, dbgWarn, checkCanvasHealth } from '../ui/debug-overlay';
 
 export class CanvasController {
   private svgCanvas: SVGSVGElement;
@@ -14,6 +15,7 @@ export class CanvasController {
   private onViewChange: (() => void) | null = null;
   private containerWidth = 0;
   private containerHeight = 0;
+  private panFrameCount = 0;
 
   constructor(svgCanvas: SVGSVGElement) {
     this.svgCanvas = svgCanvas;
@@ -83,10 +85,18 @@ export class CanvasController {
       this.cursorPosEl.textContent = `${Math.round(pt.x)}, ${Math.round(pt.y)}`;
 
       if (this.isPanning) {
+        this.panFrameCount++;
         const dx = (e.clientX - this.panStart.x) / this.zoom;
         const dy = (e.clientY - this.panStart.y) / this.zoom;
         this.viewBox.x = this.panViewBoxStart.x - dx;
         this.viewBox.y = this.panViewBoxStart.y - dy;
+        // Log every 10th frame during pan + health check every 30th
+        if (this.panFrameCount % 10 === 0) {
+          dbg(`PAN #${this.panFrameCount} vb=${this.viewBox.x.toFixed(0)},${this.viewBox.y.toFixed(0)},${this.viewBox.w.toFixed(0)},${this.viewBox.h.toFixed(0)} pb=${this.pasteboard.getAttribute('width')}`);
+        }
+        if (this.panFrameCount % 30 === 0) {
+          checkCanvasHealth();
+        }
         this.updateViewBox();
         this.notifyViewChange();
       }
@@ -98,11 +108,16 @@ export class CanvasController {
     this.panStart = { x: clientX, y: clientY };
     this.panViewBoxStart = { x: this.viewBox.x, y: this.viewBox.y };
     this.svgCanvas.style.cursor = 'grabbing';
+    dbg(`PAN START client=${clientX},${clientY} vb=${this.viewBox.x.toFixed(1)},${this.viewBox.y.toFixed(1)} zoom=${this.zoom.toFixed(3)}`);
+    dbg(`PAN START container=${this.containerWidth}x${this.containerHeight} dpr=${window.devicePixelRatio}`);
+    checkCanvasHealth();
   }
 
   endPan(): void {
     this.isPanning = false;
     this.svgCanvas.style.cursor = '';
+    dbg(`PAN END vb=${this.viewBox.x.toFixed(1)},${this.viewBox.y.toFixed(1)},${this.viewBox.w.toFixed(1)},${this.viewBox.h.toFixed(1)}`);
+    checkCanvasHealth();
   }
 
   get panning(): boolean {
@@ -162,19 +177,26 @@ export class CanvasController {
   }
 
   private updateViewBox(): void {
+    const { x, y, w, h } = this.viewBox;
+
+    // Sanity check for bad values
+    if (!isFinite(x) || !isFinite(y) || !isFinite(w) || !isFinite(h) || w <= 0 || h <= 0) {
+      dbgWarn(`BAD VIEWBOX: x=${x} y=${y} w=${w} h=${h} zoom=${this.zoom} container=${this.containerWidth}x${this.containerHeight}`);
+      return; // don't apply broken values
+    }
+
     if (this.containerWidth > 0 && this.containerHeight > 0) {
       this.svgCanvas.setAttribute('width', String(this.containerWidth));
       this.svgCanvas.setAttribute('height', String(this.containerHeight));
     }
-    this.svgCanvas.setAttribute('viewBox',
-      `${this.viewBox.x} ${this.viewBox.y} ${this.viewBox.w} ${this.viewBox.h}`);
+    this.svgCanvas.setAttribute('viewBox', `${x} ${y} ${w} ${h}`);
 
     // Keep pasteboard covering the entire visible area
-    const margin = Math.max(this.viewBox.w, this.viewBox.h);
-    this.pasteboard.setAttribute('x', String(this.viewBox.x - margin));
-    this.pasteboard.setAttribute('y', String(this.viewBox.y - margin));
-    this.pasteboard.setAttribute('width', String(this.viewBox.w + margin * 2));
-    this.pasteboard.setAttribute('height', String(this.viewBox.h + margin * 2));
+    const margin = Math.max(w, h);
+    this.pasteboard.setAttribute('x', String(x - margin));
+    this.pasteboard.setAttribute('y', String(y - margin));
+    this.pasteboard.setAttribute('width', String(w + margin * 2));
+    this.pasteboard.setAttribute('height', String(h + margin * 2));
   }
 
   private updateZoomSelect(): void {
@@ -231,7 +253,11 @@ export class CanvasController {
 
   initSize(centerOn?: { x: number; y: number; w: number; h: number }): void {
     this.measureContainer();
-    if (this.containerWidth === 0 || this.containerHeight === 0) return;
+    dbg(`initSize container=${this.containerWidth}x${this.containerHeight} dpr=${window.devicePixelRatio} centerOn=${JSON.stringify(centerOn)}`);
+    if (this.containerWidth === 0 || this.containerHeight === 0) {
+      dbgWarn('initSize: container has zero dimension, aborting');
+      return;
+    }
     this.viewBox.w = this.containerWidth / this.zoom;
     this.viewBox.h = this.containerHeight / this.zoom;
     const cx = centerOn?.x ?? 0;

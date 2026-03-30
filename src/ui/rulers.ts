@@ -1,4 +1,5 @@
 import type { CanvasController } from '../core/canvas';
+import { dbg, dbgWarn } from './debug-overlay';
 
 // Cached canvas state to avoid destroying/recreating backing stores every frame
 let hCtx: CanvasRenderingContext2D | null = null;
@@ -7,6 +8,7 @@ let hCachedW = 0, hCachedH = 0;
 let vCachedW = 0, vCachedH = 0;
 let rulerRafId = 0;
 let pendingCanvas: CanvasController | null = null;
+let rulerDrawCount = 0;
 
 // Context loss recovery
 let contextLossHandlersInstalled = false;
@@ -43,6 +45,11 @@ export function drawRulers(canvas: CanvasController): void {
 }
 
 function drawRulersImmediate(canvas: CanvasController): void {
+  rulerDrawCount++;
+  if (rulerDrawCount % 30 === 0) {
+    const vb = canvas.getViewBox();
+    dbg(`rulers draw #${rulerDrawCount} vb=${vb.x.toFixed(0)},${vb.y.toFixed(0)},${vb.w.toFixed(0)},${vb.h.toFixed(0)} zoom=${canvas.getZoom().toFixed(3)}`);
+  }
   drawHorizontalRuler(canvas);
   drawVerticalRuler(canvas);
 }
@@ -58,6 +65,7 @@ function drawHorizontalRuler(canvas: CanvasController): void {
 
   // Only resize the canvas when dimensions actually change
   if (w !== hCachedW || h !== hCachedH) {
+    dbg(`ruler-h RESIZE: ${hCachedW}x${hCachedH} -> ${w}x${h} (css=${rect.width.toFixed(0)}x${rect.height.toFixed(0)} dpr=${window.devicePixelRatio})`);
     rulerEl.width = w;
     rulerEl.height = h;
     hCachedW = w;
@@ -67,7 +75,10 @@ function drawHorizontalRuler(canvas: CanvasController): void {
 
   if (!hCtx) {
     hCtx = rulerEl.getContext('2d');
-    if (!hCtx) return; // context lost / crashed
+    if (!hCtx) {
+      dbgWarn('ruler-h: getContext returned NULL');
+      return;
+    }
     hCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
   }
 
@@ -114,6 +125,7 @@ function drawVerticalRuler(canvas: CanvasController): void {
 
   // Only resize the canvas when dimensions actually change
   if (w !== vCachedW || h !== vCachedH) {
+    dbg(`ruler-v RESIZE: ${vCachedW}x${vCachedH} -> ${w}x${h} (css=${rect.width.toFixed(0)}x${rect.height.toFixed(0)} dpr=${window.devicePixelRatio})`);
     rulerEl.width = w;
     rulerEl.height = h;
     vCachedW = w;
@@ -123,7 +135,10 @@ function drawVerticalRuler(canvas: CanvasController): void {
 
   if (!vCtx) {
     vCtx = rulerEl.getContext('2d');
-    if (!vCtx) return; // context lost / crashed
+    if (!vCtx) {
+      dbgWarn('ruler-v: getContext returned NULL');
+      return;
+    }
     vCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
   }
 
