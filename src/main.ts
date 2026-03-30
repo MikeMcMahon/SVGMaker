@@ -321,24 +321,11 @@ document.getElementById('effect-open-builder')?.addEventListener('click', () => 
 // Initial render – deferred so the grid layout has resolved and
 // #canvas-area has its final dimensions before we compute the viewBox.
 requestAnimationFrame(() => {
-  const container = document.getElementById('canvas-area')!;
-  const rect = container.getBoundingClientRect();
-  console.log('DEBUG canvas-area rect:', rect.width, rect.height);
-  console.log('DEBUG svg-canvas viewBox before init:', svgCanvas.getAttribute('viewBox'));
   const initBounds = getArtboardsBounds();
-  console.log('DEBUG artboard bounds:', initBounds);
   canvas.initSize(initBounds);
-  console.log('DEBUG svg-canvas viewBox after init:', svgCanvas.getAttribute('viewBox'));
   renderArtboards(state, svgCanvas);
   updateArtboardsPanel(state);
   drawRulers(canvas);
-  const abLayer = svgCanvas.querySelector('#artboards-layer');
-  const abRect = abLayer?.querySelector('rect');
-  console.log('DEBUG artboards-layer children:', abLayer?.children.length);
-  console.log('DEBUG first artboard rect fill:', abRect?.getAttribute('fill'));
-  console.log('DEBUG svg-canvas rendered size:', svgCanvas.getBoundingClientRect().width, 'x', svgCanvas.getBoundingClientRect().height);
-  console.log('DEBUG showTransparency:', state.showTransparency);
-  console.log('DEBUG init complete');
 });
 
 svgCanvas.setAttribute('data-tool', 'select');
@@ -362,6 +349,5 @@ canvasArea.addEventListener('drop', (e) => {
 });
 
 window.addEventListener('resize', () => {
-  canvas.initSize(getArtboardsBounds());
   drawRulers(canvas);
 });

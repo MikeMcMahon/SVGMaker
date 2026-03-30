@@ -3,6 +3,7 @@ import type { Point } from './types';
 export class CanvasController {
   private svgCanvas: SVGSVGElement;
   private container: HTMLElement;
+  private pasteboard: SVGRectElement;
   private viewBox = { x: -80, y: -30, w: 1120, h: 600 };
   private zoom = 1;
   private isPanning = false;
@@ -17,20 +18,52 @@ export class CanvasController {
   constructor(svgCanvas: SVGSVGElement) {
     this.svgCanvas = svgCanvas;
     this.container = svgCanvas.parentElement as HTMLElement;
+    this.pasteboard = document.getElementById('pasteboard') as unknown as SVGRectElement;
     this.cursorPosEl = document.getElementById('cursor-pos')!;
     this.zoomSelect = document.getElementById('zoom-select') as HTMLSelectElement;
     this.setupEvents();
+    this.setupResizeObserver();
   }
 
   setOnViewChange(fn: () => void): void {
     this.onViewChange = fn;
   }
 
+  private setupResizeObserver(): void {
+    new ResizeObserver(() => {
+      const oldW = this.containerWidth;
+      const oldH = this.containerHeight;
+      this.measureContainer();
+      if (this.containerWidth > 0 && this.containerHeight > 0
+          && (oldW !== this.containerWidth || oldH !== this.containerHeight)) {
+        const cx = this.viewBox.x + this.viewBox.w / 2;
+        const cy = this.viewBox.y + this.viewBox.h / 2;
+        this.viewBox.w = this.containerWidth / this.zoom;
+        this.viewBox.h = this.containerHeight / this.zoom;
+        this.viewBox.x = cx - this.viewBox.w / 2;
+        this.viewBox.y = cy - this.viewBox.h / 2;
+        this.updateViewBox();
+        this.notifyViewChange();
+      }
+    }).observe(this.container);
+  }
+
   private setupEvents(): void {
     this.svgCanvas.addEventListener('wheel', (e: WheelEvent) => {
       e.preventDefault();
-      const delta = e.deltaY > 0 ? 0.9 : 1.1;
-      this.setZoom(this.zoom * delta, { x: e.clientX, y: e.clientY });
+      let zoomDelta: number;
+      if (e.ctrlKey) {
+        // Trackpad pinch-to-zoom: deltaY is small, use proportional scaling
+        const scaled = Math.min(Math.abs(e.deltaY), 10) * 0.01;
+        zoomDelta = e.deltaY > 0 ? 1 - scaled : 1 + scaled;
+      } else {
+        // Mouse wheel: normalize deltaMode, then scale
+        let dy = e.deltaY;
+        if (e.deltaMode === 1) dy *= 16;
+        const scaled = Math.min(Math.abs(dy), 200) * 0.001;
+        zoomDelta = dy > 0 ? 1 - scaled : 1 + scaled;
+      }
+      this.setZoom(this.zoom * zoomDelta, { x: e.clientX, y: e.clientY });
     }, { passive: false });
 
     this.zoomSelect.addEventListener('change', () => {
@@ -77,7 +110,14 @@ export class CanvasController {
   }
 
   setZoom(newZoom: number, screenCenter?: Point): void {
-    newZoom = Math.max(0.05, Math.min(64, newZoom));
+    // Dynamic minimum zoom: prevent viewBox from exceeding ~10000 SVG units
+    const maxViewBoxDim = 10000;
+    const dynamicMin = Math.max(
+      this.containerWidth / maxViewBoxDim,
+      this.containerHeight / maxViewBoxDim,
+      0.1
+    );
+    newZoom = Math.max(dynamicMin, Math.min(64, newZoom));
 
     if (screenCenter) {
       const svgPt = this.screenToSVG(screenCenter.x, screenCenter.y);
@@ -128,10 +168,13 @@ export class CanvasController {
     }
     this.svgCanvas.setAttribute('viewBox',
       `${this.viewBox.x} ${this.viewBox.y} ${this.viewBox.w} ${this.viewBox.h}`);
-    const actual = this.svgCanvas.getBoundingClientRect();
-    if (Math.abs(actual.width - this.containerWidth) > 1 || Math.abs(actual.height - this.containerHeight) > 1) {
-      console.warn('DEBUG SVG size mismatch! expected:', this.containerWidth, this.containerHeight, 'actual:', actual.width, actual.height);
-    }
+
+    // Keep pasteboard covering the entire visible area
+    const margin = Math.max(this.viewBox.w, this.viewBox.h);
+    this.pasteboard.setAttribute('x', String(this.viewBox.x - margin));
+    this.pasteboard.setAttribute('y', String(this.viewBox.y - margin));
+    this.pasteboard.setAttribute('width', String(this.viewBox.w + margin * 2));
+    this.pasteboard.setAttribute('height', String(this.viewBox.h + margin * 2));
   }
 
   private updateZoomSelect(): void {
