@@ -1,5 +1,11 @@
 import type { CanvasController } from '../core/canvas';
 
+// Cached canvas state to avoid destroying/recreating backing stores every frame
+let hCtx: CanvasRenderingContext2D | null = null;
+let vCtx: CanvasRenderingContext2D | null = null;
+let hCachedW = 0, hCachedH = 0;
+let vCachedW = 0, vCachedH = 0;
+
 export function drawRulers(canvas: CanvasController): void {
   drawHorizontalRuler(canvas);
   drawVerticalRuler(canvas);
@@ -10,11 +16,27 @@ function drawHorizontalRuler(canvas: CanvasController): void {
   if (!rulerEl || rulerEl.classList.contains('hidden')) return;
 
   const rect = rulerEl.getBoundingClientRect();
-  rulerEl.width = rect.width * window.devicePixelRatio;
-  rulerEl.height = rect.height * window.devicePixelRatio;
+  const w = Math.round(rect.width * window.devicePixelRatio);
+  const h = Math.round(rect.height * window.devicePixelRatio);
+  if (w === 0 || h === 0) return;
 
-  const ctx = rulerEl.getContext('2d')!;
-  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  // Only resize the canvas when dimensions actually change
+  if (w !== hCachedW || h !== hCachedH) {
+    rulerEl.width = w;
+    rulerEl.height = h;
+    hCachedW = w;
+    hCachedH = h;
+    hCtx = null; // force new context after resize
+  }
+
+  if (!hCtx) {
+    hCtx = rulerEl.getContext('2d');
+    if (!hCtx) return; // context lost / crashed
+    hCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  }
+
+  const ctx = hCtx;
+  ctx.clearRect(0, 0, rect.width, rect.height);
 
   const vb = canvas.getViewBox();
   const zoom = canvas.getZoom();
@@ -50,11 +72,27 @@ function drawVerticalRuler(canvas: CanvasController): void {
   if (!rulerEl || rulerEl.classList.contains('hidden')) return;
 
   const rect = rulerEl.getBoundingClientRect();
-  rulerEl.width = rect.width * window.devicePixelRatio;
-  rulerEl.height = rect.height * window.devicePixelRatio;
+  const w = Math.round(rect.width * window.devicePixelRatio);
+  const h = Math.round(rect.height * window.devicePixelRatio);
+  if (w === 0 || h === 0) return;
 
-  const ctx = rulerEl.getContext('2d')!;
-  ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  // Only resize the canvas when dimensions actually change
+  if (w !== vCachedW || h !== vCachedH) {
+    rulerEl.width = w;
+    rulerEl.height = h;
+    vCachedW = w;
+    vCachedH = h;
+    vCtx = null; // force new context after resize
+  }
+
+  if (!vCtx) {
+    vCtx = rulerEl.getContext('2d');
+    if (!vCtx) return; // context lost / crashed
+    vCtx.scale(window.devicePixelRatio, window.devicePixelRatio);
+  }
+
+  const ctx = vCtx;
+  ctx.clearRect(0, 0, rect.width, rect.height);
 
   const vb = canvas.getViewBox();
   const zoom = canvas.getZoom();
