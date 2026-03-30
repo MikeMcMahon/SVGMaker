@@ -422,12 +422,14 @@ input, select, button { font-family: inherit; font-size: 11px; }
   position: relative;
   overflow: hidden;
   background: var(--ai-bg);
+  min-width: 0;
+  min-height: 0;
 }
 
 #svg-canvas {
-  width: 100%;
-  height: 100%;
+  position: absolute;
   display: block;
+  overflow: hidden;
   cursor: default;
 }
 
@@ -1496,6 +1498,188 @@ input, select, button { font-family: inherit; font-size: 11px; }
 
 #ctrl-rotation, #prop-rotation {
   width: 52px;
+}
+
+/* ============ EFFECTS PANEL ============ */
+.effects-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+}
+.effects-check {
+  font-size: 11px;
+  color: var(--ai-text);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 64px;
+  cursor: pointer;
+}
+.effects-check input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
+}
+.effects-label {
+  font-size: 11px;
+  color: var(--ai-text);
+  min-width: 48px;
+  flex-shrink: 0;
+}
+.effects-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 2px 8px 4px 24px;
+}
+.effects-param {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+}
+.effects-param label {
+  font-size: 10px;
+  color: var(--ai-text-dim);
+  min-width: auto;
+}
+.effects-param input[type="number"] {
+  width: 44px;
+  font-size: 11px;
+  padding: 1px 3px;
+  background: var(--ai-input-bg);
+  color: var(--ai-text);
+  border: 1px solid var(--ai-border);
+  border-radius: 2px;
+}
+.effects-param input[type="color"] {
+  width: 24px;
+  height: 18px;
+  padding: 0;
+  border: 1px solid var(--ai-border);
+  border-radius: 2px;
+  cursor: pointer;
+}
+.effects-select {
+  flex: 1;
+  font-size: 11px;
+  padding: 2px 4px;
+  background: var(--ai-input-bg);
+  color: var(--ai-text);
+  border: 1px solid var(--ai-border);
+  border-radius: 2px;
+}
+.panel-action-btn {
+  font-size: 11px;
+  padding: 3px 8px;
+  background: var(--ai-btn-bg);
+  color: var(--ai-text);
+  border: 1px solid var(--ai-border);
+  border-radius: 3px;
+  cursor: pointer;
+}
+.panel-action-btn:hover {
+  background: var(--ai-btn-hover);
+}
+
+/* ---- Filter builder overlay ---- */
+.filter-builder-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.filter-builder-panel {
+  background: var(--ai-panel-bg, #3c3c3c);
+  border: 1px solid var(--ai-border, #555);
+  border-radius: 6px;
+  width: 520px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+}
+.fb-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--ai-border, #555);
+}
+.fb-header h3 {
+  margin: 0;
+  font-size: 13px;
+  color: var(--ai-text, #ddd);
+}
+.fb-close {
+  background: none;
+  border: none;
+  color: var(--ai-text, #ddd);
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0 4px;
+}
+.fb-body {
+  padding: 8px 12px;
+  overflow-y: auto;
+  flex: 1;
+}
+.fb-prim-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.fb-prim-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  margin-bottom: 4px;
+  background: rgba(255,255,255,0.04);
+  border-radius: 3px;
+  font-size: 11px;
+  color: var(--ai-text, #ddd);
+  cursor: pointer;
+}
+.fb-prim-item.selected {
+  background: rgba(45,120,220,0.25);
+  outline: 1px solid rgba(45,120,220,0.5);
+}
+.fb-prim-item .fb-remove-prim {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: #999;
+  cursor: pointer;
+  font-size: 13px;
+}
+.fb-prim-item .fb-remove-prim:hover { color: #f66; }
+.fb-add-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 6px;
+}
+.fb-add-row select, .fb-add-row button {
+  font-size: 11px;
+  padding: 3px 6px;
+}
+.fb-params {
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(255,255,255,0.03);
+  border-radius: 4px;
+}
+.fb-params .effects-param {
+  margin-bottom: 4px;
+}
+.fb-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--ai-border, #555);
 }
 
 /* ============ RESPONSIVE HELPERS ============ */

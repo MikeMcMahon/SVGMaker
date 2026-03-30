@@ -269,7 +269,7 @@ After all phases, SVGMaker will support authoring of:
 - [x] Artboards
 - [x] **Phase 1:** Groups (`<g>`), full transforms, symbols (`<symbol>`/`<use>`), images (`<image>`)
 - [x] **Phase 2:** Linear gradients, radial gradients, pattern fills
-- [ ] **Phase 3:** Filters (blur, shadow, color, noise, lighting), blend modes
+- [x] **Phase 3:** Filters (blur, shadow, color, noise, lighting), blend modes
 - [ ] **Phase 4:** Clip paths, masks, markers
 - [ ] **Phase 5:** Rich text (`<tspan>`), text on path, wrapped text
 - [ ] **Phase 6:** SMIL animation, motion paths, CSS animation export

@@ -28,6 +28,9 @@ export interface ShapeStyle {
   strokeLinecap?: string;
   strokeLinejoin?: string;
   rx?: number;
+  filterId?: string;
+  blendMode?: BlendMode;
+  isolation?: boolean;
 }
 
 export interface ShapeData {
@@ -85,6 +88,90 @@ export interface GradientDef {
   cx?: number; cy?: number; r?: number; fx?: number; fy?: number;
   spreadMethod?: 'pad' | 'reflect' | 'repeat';
 }
+
+// ---- Filter system ----
+
+export type FilterPrimitiveType =
+  | 'feGaussianBlur'
+  | 'feDropShadow'
+  | 'feColorMatrix'
+  | 'feComponentTransfer'
+  | 'feTurbulence'
+  | 'feDiffuseLighting'
+  | 'feSpecularLighting'
+  | 'feMorphology'
+  | 'feDisplacementMap'
+  | 'feConvolveMatrix';
+
+export interface FilterPrimitive {
+  type: FilterPrimitiveType;
+  in?: string;
+  result?: string;
+  // feGaussianBlur
+  stdDeviation?: number;
+  // feDropShadow
+  dx?: number;
+  dy?: number;
+  shadowColor?: string;
+  floodOpacity?: number;
+  // feColorMatrix
+  colorMatrixType?: 'saturate' | 'hueRotate' | 'matrix';
+  values?: string;
+  // feComponentTransfer channels
+  transferR?: TransferFunction;
+  transferG?: TransferFunction;
+  transferB?: TransferFunction;
+  transferA?: TransferFunction;
+  // feTurbulence
+  turbulenceType?: 'fractalNoise' | 'turbulence';
+  baseFrequency?: number;
+  numOctaves?: number;
+  seed?: number;
+  // feDiffuseLighting / feSpecularLighting
+  surfaceScale?: number;
+  diffuseConstant?: number;
+  specularConstant?: number;
+  specularExponent?: number;
+  lightColor?: string;
+  lightType?: 'point' | 'distant' | 'spot';
+  lightX?: number; lightY?: number; lightZ?: number;
+  azimuth?: number; elevation?: number;
+  // feMorphology
+  morphOperator?: 'erode' | 'dilate';
+  morphRadius?: number;
+  // feDisplacementMap
+  in2?: string;
+  displacementScale?: number;
+  xChannelSelector?: 'R' | 'G' | 'B' | 'A';
+  yChannelSelector?: 'R' | 'G' | 'B' | 'A';
+  // feConvolveMatrix
+  kernelMatrix?: string;
+  order?: number;
+  divisor?: number;
+  bias?: number;
+}
+
+export interface TransferFunction {
+  type: 'identity' | 'table' | 'discrete' | 'linear' | 'gamma';
+  tableValues?: string;
+  slope?: number;
+  intercept?: number;
+  amplitude?: number;
+  exponent?: number;
+  offset?: number;
+}
+
+export interface FilterDef {
+  id: string;
+  name: string;
+  primitives: FilterPrimitive[];
+}
+
+export type BlendMode =
+  | 'normal' | 'multiply' | 'screen' | 'overlay'
+  | 'darken' | 'lighten' | 'color-dodge' | 'color-burn'
+  | 'hard-light' | 'soft-light' | 'difference' | 'exclusion'
+  | 'hue' | 'saturation' | 'color' | 'luminosity';
 
 export interface PatternDef {
   id: string;

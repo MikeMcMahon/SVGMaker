@@ -1,5 +1,5 @@
 import type { AppState } from '../core/state';
-import type { Artboard, ShapeStyle } from '../core/types';
+import type { Artboard, ShapeStyle, FilterDef } from '../core/types';
 
 const FORMAT_VERSION = 1;
 const FILE_EXTENSION = '.svgmaker';
@@ -26,6 +26,7 @@ interface ProjectFile {
   defaultStyle: ShapeStyle;
   fillNone: boolean;
   strokeNone: boolean;
+  filters?: FilterDef[];
 }
 
 /** Serialize the current state to a project file JSON string */
@@ -49,6 +50,7 @@ export function serializeProject(state: AppState): string {
     defaultStyle: { ...state.defaultStyle },
     fillNone: state.fillNone,
     strokeNone: state.strokeNone,
+    filters: state.filters.map(f => ({ ...f, primitives: f.primitives.map(p => ({ ...p })) })),
   };
 
   return JSON.stringify(project, null, 2);
@@ -132,6 +134,18 @@ export function loadProject(state: AppState, json: string): void {
     }
   }
 
+  // Restore filter definitions
+  if (project.filters) {
+    for (const filt of project.filters) {
+      // Only restore if not already present (importSVGMarkup might have loaded some)
+      if (!state.getFilterById(filt.id)) {
+        state.filters.push(filt);
+        // Sync to defs so the filter elements are created in the SVG
+        state.updateFilter(filt);
+      }
+    }
+  }
+
   // Restore default style
   if (project.defaultStyle) {
     Object.assign(state.defaultStyle, project.defaultStyle);
@@ -140,6 +154,7 @@ export function loadProject(state: AppState, json: string): void {
   state.strokeNone = project.strokeNone ?? false;
 
   state.selectedArtboardId = null;
+  state.needsFitToWindow = true;
   state.saveHistory();
   state.onChange_public();
 }

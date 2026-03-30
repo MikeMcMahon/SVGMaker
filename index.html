@@ -231,7 +231,7 @@
 
       <!-- Canvas Area -->
       <main id="canvas-area">
-        <svg id="svg-canvas" xmlns="http://www.w3.org/2000/svg">
+        <svg id="svg-canvas" xmlns="http://www.w3.org/2000/svg" overflow="hidden">
           <defs>
             <pattern id="grid-small" width="10" height="10" patternUnits="userSpaceOnUse">
               <path d="M 10 0 L 0 0 0 10" fill="none" stroke="#e8e8e8" stroke-width="0.3"/>
@@ -380,6 +380,95 @@
               <span class="appearance-label">Opacity</span>
               <input type="range" id="prop-opacity" min="0" max="1" step="0.01" value="1" class="appearance-slider" />
               <span id="prop-opacity-val" class="appearance-pct">100%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Effects (Filters & Blend Modes) -->
+        <div class="panel" id="panel-effects">
+          <div class="panel-header" data-panel="effects">
+            <span>Effects</span>
+            <button class="panel-collapse">&#x25BC;</button>
+          </div>
+          <div class="panel-body">
+            <!-- Blur -->
+            <div class="effects-row">
+              <label class="effects-check"><input type="checkbox" id="effect-blur-enabled" /> Blur</label>
+              <input type="range" id="effect-blur-radius" min="0" max="50" step="0.5" value="0" class="appearance-slider" />
+              <span id="effect-blur-val" class="appearance-pct">0</span>
+            </div>
+
+            <div class="appearance-divider"></div>
+
+            <!-- Drop Shadow -->
+            <div class="effects-row">
+              <label class="effects-check"><input type="checkbox" id="effect-shadow-enabled" /> Shadow</label>
+            </div>
+            <div class="effects-sub" id="effect-shadow-controls" style="display:none">
+              <div class="effects-param"><label>X</label><input type="number" id="effect-shadow-dx" value="4" step="1" /></div>
+              <div class="effects-param"><label>Y</label><input type="number" id="effect-shadow-dy" value="4" step="1" /></div>
+              <div class="effects-param"><label>Blur</label><input type="number" id="effect-shadow-blur" value="4" min="0" step="0.5" /></div>
+              <div class="effects-param"><label>Color</label><input type="color" id="effect-shadow-color" value="#000000" /></div>
+              <div class="effects-param"><label>Opacity</label><input type="range" id="effect-shadow-opacity" min="0" max="1" step="0.01" value="0.5" class="appearance-slider" /><span id="effect-shadow-opacity-val" class="appearance-pct">50%</span></div>
+            </div>
+
+            <div class="appearance-divider"></div>
+
+            <!-- Color Effects -->
+            <div class="effects-row">
+              <label class="effects-label">Saturate</label>
+              <input type="range" id="effect-saturate" min="0" max="300" value="100" class="appearance-slider" />
+              <span id="effect-saturate-val" class="appearance-pct">100%</span>
+            </div>
+            <div class="effects-row">
+              <label class="effects-label">Hue</label>
+              <input type="range" id="effect-hue-rotate" min="0" max="360" value="0" class="appearance-slider" />
+              <span id="effect-hue-val" class="appearance-pct">0&deg;</span>
+            </div>
+            <div class="effects-row">
+              <label class="effects-label">Bright</label>
+              <input type="range" id="effect-brightness" min="0" max="300" value="100" class="appearance-slider" />
+              <span id="effect-brightness-val" class="appearance-pct">100%</span>
+            </div>
+            <div class="effects-row">
+              <label class="effects-label">Contrast</label>
+              <input type="range" id="effect-contrast" min="0" max="300" value="100" class="appearance-slider" />
+              <span id="effect-contrast-val" class="appearance-pct">100%</span>
+            </div>
+
+            <div class="appearance-divider"></div>
+
+            <!-- Blend Mode -->
+            <div class="effects-row">
+              <label class="effects-label">Blend</label>
+              <select id="effect-blend-mode" class="effects-select">
+                <option value="normal">Normal</option>
+                <option value="multiply">Multiply</option>
+                <option value="screen">Screen</option>
+                <option value="overlay">Overlay</option>
+                <option value="darken">Darken</option>
+                <option value="lighten">Lighten</option>
+                <option value="color-dodge">Color Dodge</option>
+                <option value="color-burn">Color Burn</option>
+                <option value="hard-light">Hard Light</option>
+                <option value="soft-light">Soft Light</option>
+                <option value="difference">Difference</option>
+                <option value="exclusion">Exclusion</option>
+                <option value="hue">Hue</option>
+                <option value="saturation">Saturation</option>
+                <option value="color">Color</option>
+                <option value="luminosity">Luminosity</option>
+              </select>
+            </div>
+            <div class="effects-row" id="effect-isolation-row" style="display:none">
+              <label class="effects-check"><input type="checkbox" id="effect-isolation" /> Isolate Group</label>
+            </div>
+
+            <div class="appearance-divider"></div>
+
+            <!-- Advanced Filter Builder -->
+            <div class="effects-row">
+              <button id="effect-open-builder" class="panel-action-btn">Filter Builder...</button>
             </div>
           </div>
         </div>

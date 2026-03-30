@@ -2,6 +2,7 @@ import type { Point } from './types';
 
 export class CanvasController {
   private svgCanvas: SVGSVGElement;
+  private container: HTMLElement;
   private viewBox = { x: -80, y: -30, w: 1120, h: 600 };
   private zoom = 1;
   private isPanning = false;
@@ -10,12 +11,14 @@ export class CanvasController {
   private cursorPosEl: HTMLElement;
   private zoomSelect: HTMLSelectElement;
   private onViewChange: (() => void) | null = null;
+  private containerWidth = 0;
+  private containerHeight = 0;
 
   constructor(svgCanvas: SVGSVGElement) {
     this.svgCanvas = svgCanvas;
+    this.container = svgCanvas.parentElement as HTMLElement;
     this.cursorPosEl = document.getElementById('cursor-pos')!;
     this.zoomSelect = document.getElementById('zoom-select') as HTMLSelectElement;
-    this.updateViewBox();
     this.setupEvents();
   }
 
@@ -79,9 +82,8 @@ export class CanvasController {
     if (screenCenter) {
       const svgPt = this.screenToSVG(screenCenter.x, screenCenter.y);
       this.zoom = newZoom;
-      const rect = this.svgCanvas.getBoundingClientRect();
-      this.viewBox.w = rect.width / this.zoom;
-      this.viewBox.h = rect.height / this.zoom;
+      this.viewBox.w = this.containerWidth / this.zoom;
+      this.viewBox.h = this.containerHeight / this.zoom;
       const newSvgPt = this.screenToSVG(screenCenter.x, screenCenter.y);
       this.viewBox.x += svgPt.x - newSvgPt.x;
       this.viewBox.y += svgPt.y - newSvgPt.y;
@@ -89,9 +91,8 @@ export class CanvasController {
       const cx = this.viewBox.x + this.viewBox.w / 2;
       const cy = this.viewBox.y + this.viewBox.h / 2;
       this.zoom = newZoom;
-      const rect = this.svgCanvas.getBoundingClientRect();
-      this.viewBox.w = rect.width / this.zoom;
-      this.viewBox.h = rect.height / this.zoom;
+      this.viewBox.w = this.containerWidth / this.zoom;
+      this.viewBox.h = this.containerHeight / this.zoom;
       this.viewBox.x = cx - this.viewBox.w / 2;
       this.viewBox.y = cy - this.viewBox.h / 2;
     }
@@ -102,18 +103,17 @@ export class CanvasController {
   }
 
   fitToWindow(bounds?: { x: number; y: number; w: number; h: number }): void {
-    const rect = this.svgCanvas.getBoundingClientRect();
     const bx = bounds?.x ?? 0;
     const by = bounds?.y ?? 0;
     const bw = bounds?.w ?? 960;
     const bh = bounds?.h ?? 540;
     const pad = 60;
-    const scaleX = rect.width / (bw + pad * 2);
-    const scaleY = rect.height / (bh + pad * 2);
+    const scaleX = this.containerWidth / (bw + pad * 2);
+    const scaleY = this.containerHeight / (bh + pad * 2);
     const scale = Math.min(scaleX, scaleY);
     this.zoom = scale;
-    this.viewBox.w = rect.width / this.zoom;
-    this.viewBox.h = rect.height / this.zoom;
+    this.viewBox.w = this.containerWidth / this.zoom;
+    this.viewBox.h = this.containerHeight / this.zoom;
     this.viewBox.x = bx + (bw - this.viewBox.w) / 2;
     this.viewBox.y = by + (bh - this.viewBox.h) / 2;
     this.updateViewBox();
@@ -122,8 +122,16 @@ export class CanvasController {
   }
 
   private updateViewBox(): void {
+    if (this.containerWidth > 0 && this.containerHeight > 0) {
+      this.svgCanvas.setAttribute('width', String(this.containerWidth));
+      this.svgCanvas.setAttribute('height', String(this.containerHeight));
+    }
     this.svgCanvas.setAttribute('viewBox',
       `${this.viewBox.x} ${this.viewBox.y} ${this.viewBox.w} ${this.viewBox.h}`);
+    const actual = this.svgCanvas.getBoundingClientRect();
+    if (Math.abs(actual.width - this.containerWidth) > 1 || Math.abs(actual.height - this.containerHeight) > 1) {
+      console.warn('DEBUG SVG size mismatch! expected:', this.containerWidth, this.containerHeight, 'actual:', actual.width, actual.height);
+    }
   }
 
   private updateZoomSelect(): void {
@@ -155,7 +163,7 @@ export class CanvasController {
   }
 
   screenToSVG(clientX: number, clientY: number): Point {
-    const rect = this.svgCanvas.getBoundingClientRect();
+    const rect = this.container.getBoundingClientRect();
     return {
       x: this.viewBox.x + (clientX - rect.left) / this.zoom,
       y: this.viewBox.y + (clientY - rect.top) / this.zoom,
@@ -170,10 +178,19 @@ export class CanvasController {
     return { ...this.viewBox };
   }
 
+  /** Read the container's pixel size and update the SVG to match. Call on init and window resize. */
+  measureContainer(): void {
+    const rect = this.container.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return;
+    this.containerWidth = rect.width;
+    this.containerHeight = rect.height;
+  }
+
   initSize(centerOn?: { x: number; y: number; w: number; h: number }): void {
-    const rect = this.svgCanvas.getBoundingClientRect();
-    this.viewBox.w = rect.width / this.zoom;
-    this.viewBox.h = rect.height / this.zoom;
+    this.measureContainer();
+    if (this.containerWidth === 0 || this.containerHeight === 0) return;
+    this.viewBox.w = this.containerWidth / this.zoom;
+    this.viewBox.h = this.containerHeight / this.zoom;
     const cx = centerOn?.x ?? 0;
     const cy = centerOn?.y ?? 0;
     const cw = centerOn?.w ?? 960;

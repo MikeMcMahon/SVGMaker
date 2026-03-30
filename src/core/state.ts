@@ -1,4 +1,4 @@
-import type { ToolName, ShapeData, HistoryEntry, ShapeStyle, Artboard, SymbolDef, GradientDef, GradientStop, PatternDef } from './types';
+import type { ToolName, ShapeData, HistoryEntry, ShapeStyle, Artboard, SymbolDef, GradientDef, GradientStop, PatternDef, FilterDef, FilterPrimitive, FilterPrimitiveType, BlendMode } from './types';
 
 export class AppState {
   currentTool: ToolName = 'select';
@@ -35,6 +35,7 @@ export class AppState {
   fillNone = false;
   strokeNone = false;
   showTransparency = true; // checkerboard background on by default
+  needsFitToWindow = false;
 
   symbols: SymbolDef[] = [];
   private symbolCounter = 0;
@@ -44,6 +45,9 @@ export class AppState {
   private gradCounter = 0;
   patterns: PatternDef[] = [];
   private patternCounter = 0;
+
+  filters: FilterDef[] = [];
+  private filterCounter = 0;
 
   constructor(drawingLayer: SVGGElement, onChange: () => void) {
     this.drawingLayer = drawingLayer;
@@ -496,12 +500,14 @@ export class AppState {
 
   private readStyle(el: SVGElement, type: ShapeData['type']): ShapeStyle {
     if (type === 'group' || type === 'image' || type === 'use') {
-      return {
+      const style: ShapeStyle = {
         fill: el.getAttribute('fill') ?? 'none',
         stroke: el.getAttribute('stroke') ?? 'none',
         strokeWidth: parseFloat(el.getAttribute('stroke-width') ?? '0'),
         opacity: parseFloat(el.getAttribute('opacity') ?? '1'),
       };
+      this.readFilterAndBlend(el, style);
+      return style;
     }
     const fill = el.getAttribute('fill') ?? (type === 'line' ? 'none' : '#FFFFFF');
     const stroke = el.getAttribute('stroke') ?? '#000000';
@@ -520,7 +526,27 @@ export class AppState {
       style.fontWeight = el.getAttribute('font-weight') ?? 'normal';
       style.fontStyle = el.getAttribute('font-style') ?? 'normal';
     }
+    this.readFilterAndBlend(el, style);
     return style;
+  }
+
+  private readFilterAndBlend(el: SVGElement, style: ShapeStyle): void {
+    // Parse filter attribute: url(#filt-N)
+    const filterAttr = el.getAttribute('filter');
+    if (filterAttr) {
+      const m = filterAttr.match(/url\(#(filt-\d+)\)/);
+      if (m) style.filterId = m[1];
+    }
+    // Parse mix-blend-mode from inline style
+    const blendMode = (el as unknown as HTMLElement).style.mixBlendMode;
+    if (blendMode && blendMode !== 'normal') {
+      style.blendMode = blendMode as BlendMode;
+    }
+    // Parse isolation from inline style
+    const isolation = (el as unknown as HTMLElement).style.isolation;
+    if (isolation === 'isolate') {
+      style.isolation = true;
+    }
   }
 
   // Multi-selection support
@@ -1000,6 +1026,166 @@ export class AppState {
     }
   }
 
+  // ---- Filter management ----
+
+  createFilter(primitives: FilterPrimitive[], name?: string): FilterDef {
+    const id = `filt-${++this.filterCounter}`;
+    const filt: FilterDef = { id, name: name ?? 'Filter', primitives };
+    this.filters.push(filt);
+    this.syncFilterToDefs(filt);
+    return filt;
+  }
+
+  updateFilter(filt: FilterDef): void {
+    const idx = this.filters.findIndex(f => f.id === filt.id);
+    if (idx >= 0) this.filters[idx] = filt;
+    this.syncFilterToDefs(filt);
+    this.onChangeCallback();
+  }
+
+  removeFilter(id: string): void {
+    this.filters = this.filters.filter(f => f.id !== id);
+    const defs = this.ensureDefs();
+    const el = defs.querySelector(`#${id}`);
+    if (el) el.remove();
+  }
+
+  getFilterById(id: string): FilterDef | undefined {
+    return this.filters.find(f => f.id === id);
+  }
+
+  private syncFilterToDefs(filt: FilterDef): void {
+    const defs = this.ensureDefs();
+    const NS = 'http://www.w3.org/2000/svg';
+
+    const existing = defs.querySelector(`#${filt.id}`);
+    if (existing) existing.remove();
+
+    const el = document.createElementNS(NS, 'filter');
+    el.id = filt.id;
+    // Extend filter region to handle blur/shadow overflow
+    el.setAttribute('x', '-25%');
+    el.setAttribute('y', '-25%');
+    el.setAttribute('width', '150%');
+    el.setAttribute('height', '150%');
+
+    for (const prim of filt.primitives) {
+      const primEl = this.buildFilterPrimitiveElement(NS, prim);
+      if (primEl) el.appendChild(primEl);
+    }
+
+    defs.appendChild(el);
+  }
+
+  private buildFilterPrimitiveElement(NS: string, prim: FilterPrimitive): Element | null {
+    const el = document.createElementNS(NS, prim.type);
+    if (prim.in) el.setAttribute('in', prim.in);
+    if (prim.result) el.setAttribute('result', prim.result);
+
+    switch (prim.type) {
+      case 'feGaussianBlur':
+        el.setAttribute('stdDeviation', String(prim.stdDeviation ?? 0));
+        break;
+
+      case 'feDropShadow':
+        el.setAttribute('dx', String(prim.dx ?? 4));
+        el.setAttribute('dy', String(prim.dy ?? 4));
+        el.setAttribute('stdDeviation', String(prim.stdDeviation ?? 4));
+        el.setAttribute('flood-color', prim.shadowColor ?? '#000000');
+        el.setAttribute('flood-opacity', String(prim.floodOpacity ?? 0.5));
+        break;
+
+      case 'feColorMatrix':
+        el.setAttribute('type', prim.colorMatrixType ?? 'saturate');
+        if (prim.values != null) el.setAttribute('values', prim.values);
+        break;
+
+      case 'feComponentTransfer': {
+        const channels = [
+          { key: 'transferR', tag: 'feFuncR' },
+          { key: 'transferG', tag: 'feFuncG' },
+          { key: 'transferB', tag: 'feFuncB' },
+          { key: 'transferA', tag: 'feFuncA' },
+        ] as const;
+        for (const ch of channels) {
+          const tf = prim[ch.key];
+          if (!tf) continue;
+          const func = document.createElementNS(NS, ch.tag);
+          func.setAttribute('type', tf.type);
+          if (tf.slope != null) func.setAttribute('slope', String(tf.slope));
+          if (tf.intercept != null) func.setAttribute('intercept', String(tf.intercept));
+          if (tf.amplitude != null) func.setAttribute('amplitude', String(tf.amplitude));
+          if (tf.exponent != null) func.setAttribute('exponent', String(tf.exponent));
+          if (tf.offset != null) func.setAttribute('offset', String(tf.offset));
+          if (tf.tableValues != null) func.setAttribute('tableValues', tf.tableValues);
+          el.appendChild(func);
+        }
+        break;
+      }
+
+      case 'feTurbulence':
+        el.setAttribute('type', prim.turbulenceType ?? 'turbulence');
+        el.setAttribute('baseFrequency', String(prim.baseFrequency ?? 0.05));
+        el.setAttribute('numOctaves', String(prim.numOctaves ?? 3));
+        if (prim.seed != null) el.setAttribute('seed', String(prim.seed));
+        break;
+
+      case 'feDiffuseLighting':
+      case 'feSpecularLighting': {
+        el.setAttribute('surfaceScale', String(prim.surfaceScale ?? 1));
+        if (prim.type === 'feDiffuseLighting') {
+          el.setAttribute('diffuseConstant', String(prim.diffuseConstant ?? 1));
+        } else {
+          el.setAttribute('specularConstant', String(prim.specularConstant ?? 1));
+          el.setAttribute('specularExponent', String(prim.specularExponent ?? 20));
+        }
+        if (prim.lightColor) el.setAttribute('lighting-color', prim.lightColor);
+
+        // Add light source child
+        const lightType = prim.lightType ?? 'distant';
+        if (lightType === 'point') {
+          const light = document.createElementNS(NS, 'fePointLight');
+          light.setAttribute('x', String(prim.lightX ?? 0));
+          light.setAttribute('y', String(prim.lightY ?? 0));
+          light.setAttribute('z', String(prim.lightZ ?? 100));
+          el.appendChild(light);
+        } else if (lightType === 'distant') {
+          const light = document.createElementNS(NS, 'feDistantLight');
+          light.setAttribute('azimuth', String(prim.azimuth ?? 225));
+          light.setAttribute('elevation', String(prim.elevation ?? 45));
+          el.appendChild(light);
+        } else {
+          const light = document.createElementNS(NS, 'feSpotLight');
+          light.setAttribute('x', String(prim.lightX ?? 0));
+          light.setAttribute('y', String(prim.lightY ?? 0));
+          light.setAttribute('z', String(prim.lightZ ?? 100));
+          el.appendChild(light);
+        }
+        break;
+      }
+
+      case 'feMorphology':
+        el.setAttribute('operator', prim.morphOperator ?? 'dilate');
+        el.setAttribute('radius', String(prim.morphRadius ?? 1));
+        break;
+
+      case 'feDisplacementMap':
+        if (prim.in2) el.setAttribute('in2', prim.in2);
+        el.setAttribute('scale', String(prim.displacementScale ?? 10));
+        el.setAttribute('xChannelSelector', prim.xChannelSelector ?? 'R');
+        el.setAttribute('yChannelSelector', prim.yChannelSelector ?? 'G');
+        break;
+
+      case 'feConvolveMatrix':
+        if (prim.kernelMatrix) el.setAttribute('kernelMatrix', prim.kernelMatrix);
+        if (prim.order != null) el.setAttribute('order', String(prim.order));
+        if (prim.divisor != null) el.setAttribute('divisor', String(prim.divisor));
+        if (prim.bias != null) el.setAttribute('bias', String(prim.bias));
+        break;
+    }
+    return el;
+  }
+
   // ---- Defs export ----
 
   getDefsContent(): string {
@@ -1010,7 +1196,7 @@ export class AppState {
       // Export gradients and patterns from the live defs element
       for (const child of Array.from(defs.children)) {
         const tag = child.tagName.toLowerCase();
-        if (tag === 'lineargradient' || tag === 'radialgradient' || tag === 'pattern') {
+        if (tag === 'lineargradient' || tag === 'radialgradient' || tag === 'pattern' || tag === 'filter') {
           parts.push(child.outerHTML);
         }
       }
@@ -1037,6 +1223,7 @@ export class AppState {
     }];
     this.activeArtboardId = this.artboards[0].id;
     this.selectedArtboardId = null;
+    this.needsFitToWindow = true;
     this.saveHistory();
     this.onChangeCallback();
   }
@@ -1101,7 +1288,102 @@ export class AppState {
           tileHeight: parseFloat(child.getAttribute('height') ?? '20'),
         });
       }
+
+      if (tag === 'filter') {
+        const id = child.id || `filt-${++this.filterCounter}`;
+        const m = id.match(/filt-(\d+)/);
+        if (m) this.filterCounter = Math.max(this.filterCounter, parseInt(m[1]));
+
+        // Parse filter primitives
+        const primitives: FilterPrimitive[] = [];
+        for (const primEl of Array.from(child.children)) {
+          const prim = this.parseFilterPrimitive(primEl);
+          if (prim) primitives.push(prim);
+        }
+        this.filters.push({ id, name: 'Filter', primitives });
+
+        const imported = document.importNode(child, true) as SVGElement;
+        this.ensureDefs().appendChild(imported);
+      }
     }
+  }
+
+  private parseFilterPrimitive(el: Element): FilterPrimitive | null {
+    const tag = el.tagName as FilterPrimitiveType;
+    const validTypes: FilterPrimitiveType[] = [
+      'feGaussianBlur', 'feDropShadow', 'feColorMatrix', 'feComponentTransfer',
+      'feTurbulence', 'feDiffuseLighting', 'feSpecularLighting', 'feMorphology',
+      'feDisplacementMap', 'feConvolveMatrix',
+    ];
+    if (!validTypes.includes(tag)) return null;
+
+    const prim: FilterPrimitive = { type: tag };
+    const inAttr = el.getAttribute('in');
+    if (inAttr) prim.in = inAttr;
+    const resultAttr = el.getAttribute('result');
+    if (resultAttr) prim.result = resultAttr;
+
+    switch (tag) {
+      case 'feGaussianBlur':
+        prim.stdDeviation = parseFloat(el.getAttribute('stdDeviation') ?? '0');
+        break;
+      case 'feDropShadow':
+        prim.dx = parseFloat(el.getAttribute('dx') ?? '4');
+        prim.dy = parseFloat(el.getAttribute('dy') ?? '4');
+        prim.stdDeviation = parseFloat(el.getAttribute('stdDeviation') ?? '4');
+        prim.shadowColor = el.getAttribute('flood-color') ?? '#000000';
+        prim.floodOpacity = parseFloat(el.getAttribute('flood-opacity') ?? '0.5');
+        break;
+      case 'feColorMatrix':
+        prim.colorMatrixType = (el.getAttribute('type') as FilterPrimitive['colorMatrixType']) ?? 'saturate';
+        prim.values = el.getAttribute('values') ?? undefined;
+        break;
+      case 'feComponentTransfer': {
+        const funcR = el.querySelector('feFuncR');
+        const funcG = el.querySelector('feFuncG');
+        const funcB = el.querySelector('feFuncB');
+        if (funcR) prim.transferR = { type: (funcR.getAttribute('type') ?? 'identity') as 'linear', slope: parseFloat(funcR.getAttribute('slope') ?? '1'), intercept: parseFloat(funcR.getAttribute('intercept') ?? '0') };
+        if (funcG) prim.transferG = { type: (funcG.getAttribute('type') ?? 'identity') as 'linear', slope: parseFloat(funcG.getAttribute('slope') ?? '1'), intercept: parseFloat(funcG.getAttribute('intercept') ?? '0') };
+        if (funcB) prim.transferB = { type: (funcB.getAttribute('type') ?? 'identity') as 'linear', slope: parseFloat(funcB.getAttribute('slope') ?? '1'), intercept: parseFloat(funcB.getAttribute('intercept') ?? '0') };
+        break;
+      }
+      case 'feTurbulence':
+        prim.turbulenceType = (el.getAttribute('type') ?? 'turbulence') as 'turbulence' | 'fractalNoise';
+        prim.baseFrequency = parseFloat(el.getAttribute('baseFrequency') ?? '0.05');
+        prim.numOctaves = parseInt(el.getAttribute('numOctaves') ?? '3');
+        prim.seed = parseFloat(el.getAttribute('seed') ?? '0');
+        break;
+      case 'feDiffuseLighting':
+      case 'feSpecularLighting':
+        prim.surfaceScale = parseFloat(el.getAttribute('surfaceScale') ?? '1');
+        if (tag === 'feDiffuseLighting') prim.diffuseConstant = parseFloat(el.getAttribute('diffuseConstant') ?? '1');
+        else { prim.specularConstant = parseFloat(el.getAttribute('specularConstant') ?? '1'); prim.specularExponent = parseFloat(el.getAttribute('specularExponent') ?? '20'); }
+        prim.lightColor = el.getAttribute('lighting-color') ?? '#FFFFFF';
+        // Parse light source
+        const pointLight = el.querySelector('fePointLight');
+        const distantLight = el.querySelector('feDistantLight');
+        if (pointLight) { prim.lightType = 'point'; prim.lightX = parseFloat(pointLight.getAttribute('x') ?? '0'); prim.lightY = parseFloat(pointLight.getAttribute('y') ?? '0'); prim.lightZ = parseFloat(pointLight.getAttribute('z') ?? '100'); }
+        else if (distantLight) { prim.lightType = 'distant'; prim.azimuth = parseFloat(distantLight.getAttribute('azimuth') ?? '225'); prim.elevation = parseFloat(distantLight.getAttribute('elevation') ?? '45'); }
+        else { prim.lightType = 'distant'; prim.azimuth = 225; prim.elevation = 45; }
+        break;
+      case 'feMorphology':
+        prim.morphOperator = (el.getAttribute('operator') ?? 'dilate') as 'erode' | 'dilate';
+        prim.morphRadius = parseFloat(el.getAttribute('radius') ?? '1');
+        break;
+      case 'feDisplacementMap':
+        prim.in2 = el.getAttribute('in2') ?? undefined;
+        prim.displacementScale = parseFloat(el.getAttribute('scale') ?? '10');
+        prim.xChannelSelector = (el.getAttribute('xChannelSelector') ?? 'R') as 'R';
+        prim.yChannelSelector = (el.getAttribute('yChannelSelector') ?? 'G') as 'G';
+        break;
+      case 'feConvolveMatrix':
+        prim.kernelMatrix = el.getAttribute('kernelMatrix') ?? undefined;
+        prim.order = parseInt(el.getAttribute('order') ?? '3');
+        prim.divisor = parseFloat(el.getAttribute('divisor') ?? '1');
+        prim.bias = parseFloat(el.getAttribute('bias') ?? '0');
+        break;
+    }
+    return prim;
   }
 
   importSVGContent(svgString: string): void {
@@ -1158,6 +1440,7 @@ export class AppState {
     };
     this.shapes = importElements(svgEl, this.drawingLayer);
     this.selectedShapeIds = [];
+    this.needsFitToWindow = true;
     this.saveHistory();
     this.onChangeCallback();
   }

@@ -29,6 +29,8 @@ import { updateArtboardsPanel, setupArtboardButtons } from './ui/artboards-panel
 import { updateSymbolsPanel, setupSymbolButtons } from './ui/symbols-panel';
 import { showExportDialog } from './ui/export-dialog';
 import { saveProject, openProject } from './ui/project-file';
+import { setupFiltersPanel, updateFiltersPanel } from './ui/filters-panel';
+import { openFilterBuilder } from './ui/filter-builder';
 import type { Tool } from './tools/base';
 import type { ToolName } from './core/types';
 
@@ -96,9 +98,15 @@ function getArtboardsBounds(): { x: number; y: number; w: number; h: number } {
 }
 
 function onStateChange(): void {
+  if (state.needsFitToWindow) {
+    state.needsFitToWindow = false;
+    canvas.fitToWindow(getArtboardsBounds());
+    drawRulers(canvas);
+  }
   renderArtboards(state, svgCanvas);
   updateSelectionOverlay(state, selectionLayer);
   updatePropertiesPanel(state);
+  updateFiltersPanel(state);
   updateLayersPanel(state);
   updateArtboardsPanel(state);
   updateSymbolsPanel(state);
@@ -303,13 +311,35 @@ setupArtboardButtons(state);
 setupColorPicker(state);
 setupAlign(state);
 setupSymbolButtons(state);
+setupFiltersPanel(state);
 
-// Initial render
-const initBounds = getArtboardsBounds();
-canvas.initSize(initBounds);
-renderArtboards(state, svgCanvas);
-updateArtboardsPanel(state);
-drawRulers(canvas);
+// Filter builder button
+document.getElementById('effect-open-builder')?.addEventListener('click', () => {
+  openFilterBuilder(state);
+});
+
+// Initial render – deferred so the grid layout has resolved and
+// #canvas-area has its final dimensions before we compute the viewBox.
+requestAnimationFrame(() => {
+  const container = document.getElementById('canvas-area')!;
+  const rect = container.getBoundingClientRect();
+  console.log('DEBUG canvas-area rect:', rect.width, rect.height);
+  console.log('DEBUG svg-canvas viewBox before init:', svgCanvas.getAttribute('viewBox'));
+  const initBounds = getArtboardsBounds();
+  console.log('DEBUG artboard bounds:', initBounds);
+  canvas.initSize(initBounds);
+  console.log('DEBUG svg-canvas viewBox after init:', svgCanvas.getAttribute('viewBox'));
+  renderArtboards(state, svgCanvas);
+  updateArtboardsPanel(state);
+  drawRulers(canvas);
+  const abLayer = svgCanvas.querySelector('#artboards-layer');
+  const abRect = abLayer?.querySelector('rect');
+  console.log('DEBUG artboards-layer children:', abLayer?.children.length);
+  console.log('DEBUG first artboard rect fill:', abRect?.getAttribute('fill'));
+  console.log('DEBUG svg-canvas rendered size:', svgCanvas.getBoundingClientRect().width, 'x', svgCanvas.getBoundingClientRect().height);
+  console.log('DEBUG showTransparency:', state.showTransparency);
+  console.log('DEBUG init complete');
+});
 
 svgCanvas.setAttribute('data-tool', 'select');
 
