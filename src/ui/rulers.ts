@@ -5,8 +5,44 @@ let hCtx: CanvasRenderingContext2D | null = null;
 let vCtx: CanvasRenderingContext2D | null = null;
 let hCachedW = 0, hCachedH = 0;
 let vCachedW = 0, vCachedH = 0;
+let rulerRafId = 0;
+let pendingCanvas: CanvasController | null = null;
+
+// Context loss recovery
+let contextLossHandlersInstalled = false;
+function installContextLossHandlers(): void {
+  if (contextLossHandlersInstalled) return;
+  contextLossHandlersInstalled = true;
+
+  for (const id of ['ruler-h', 'ruler-v']) {
+    const el = document.getElementById(id) as HTMLCanvasElement | null;
+    if (!el) continue;
+    el.addEventListener('contextlost', (e) => {
+      e.preventDefault(); // allow restoration
+      console.warn(`[SVGMaker] Canvas context lost: ${id}`);
+      if (id === 'ruler-h') hCtx = null;
+      else vCtx = null;
+    });
+    el.addEventListener('contextrestored', () => {
+      console.info(`[SVGMaker] Canvas context restored: ${id}`);
+      if (id === 'ruler-h') { hCtx = null; hCachedW = 0; hCachedH = 0; }
+      else { vCtx = null; vCachedW = 0; vCachedH = 0; }
+      if (pendingCanvas) drawRulersImmediate(pendingCanvas);
+    });
+  }
+}
 
 export function drawRulers(canvas: CanvasController): void {
+  installContextLossHandlers();
+  pendingCanvas = canvas;
+  if (rulerRafId) return; // already scheduled
+  rulerRafId = requestAnimationFrame(() => {
+    rulerRafId = 0;
+    if (pendingCanvas) drawRulersImmediate(pendingCanvas);
+  });
+}
+
+function drawRulersImmediate(canvas: CanvasController): void {
   drawHorizontalRuler(canvas);
   drawVerticalRuler(canvas);
 }
